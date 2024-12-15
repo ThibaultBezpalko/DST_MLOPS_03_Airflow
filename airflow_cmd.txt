@@ -1,0 +1,73 @@
+########
+AIRFLOW
+########
+
+
+----------------------------
+Environment preparation
+----------------------------
+
+# Download file docker-compose.yaml
+mkdir airflow_dst
+cd airflow_dst
+wget https://dst-de.s3.eu-west-3.amazonaws.com/airflow_fr/docker-compose/docker-compose.yaml
+
+# Volumes creation
+mkdir ./dags ./logs ./plugins
+sudo chmod -R 777 logs/
+sudo chmod -R 777 dags/
+sudo chmod -R 777 plugins/
+
+# Creation of an environmeent variables file
+echo -e "AIRFLOW_UID=$(id -u)\nAIRFLOW_GID=0" > .env
+
+# Initialize the database for Airflow
+docker-compose up airflow-init
+
+# Containers launch
+docker-compose up -d
+
+# Reach UI 
+https://<VM IP address>:8080
+
+# Close docker airflow containers
+docker-compose down --remove-orphans
+
+----------------------------------
+Exercice
+----------------------------------
+
+# Allow reading/writing on unix socket 
+sudo chmod a+rw /var/run/docker.sock
+
+# generate the transformed files from the input json: python_transform
+    > input file transformation container
+    docker build -t python_transform .
+    > run container
+    docker run -it -v $PWD/app:/app --name python_transform python_transform bash
+    > from "airflow" (project) folder, copy input data
+    cp data/orders/2024-05-09.json docker/dev/python_transform/app/data/to_ingest/bronze/orders.json
+    > in folder "airflow/docker/dev/python_transform/app", download main.py
+    wget https://dst-de.s3.eu-west-3.amazonaws.com/airflow/order_example/transform.py -O main.py 
+    > in the running container, run the transformation python file
+    python3 main.py
+
+# load into database the transformed files: python_load
+    > transformed files loading container
+    docker build -t python_load .
+    > run container
+    docker run -it -e HOST=postgres -e DATABASE=airflow -e USER=airflow -e PASSWORD=airflow --network <working folder>_airflow_default -v $PWD/app:/app --name python_load python_load bash
+    > from "airflow" (project) folder, copy transformed data
+    cp -r docker/dev/python_transform/app/data/to_ingest/silver/ docker/dev/python_load/app/data/to_ingest/
+    > in folder "airflow/docker/dev/python_load/app", download main.py
+    wget https://dst-de.s3.eu-west-3.amazonaws.com/airflow/order_example/load.py -O main.py 
+    > in the running container, run the transformation python file
+    python3 main.py
+
+# 
+    > orders.json sensor container
+    
+
+
+docker run -it -e HOST=postgres -e DATABASE=airflow -e USER=airflow -e PASSWORD=airflow --network airflow_default -v $PWD/app:/app --name python_load python_load bash
+
